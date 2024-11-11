@@ -5,19 +5,26 @@ export interface MySettings {
     openaiApiKey?: string;
     langchainApiKey?: string;
     enableLangSmithTracing?: boolean;
+    [key: string]: any;
 }
 
 export const DEFAULT_SETTINGS: MySettings = {
 };
 
-type ISettingsTabPlugin = Plugin & {
+export type ISettingsProvider = Plugin & {
     settings: MySettings;
     saveSettings: () => Promise<void>;
+    getStringConfig: (key: string) => string | undefined;
+    setStringConfig: (key: string, value: string) => void;
+    getBooleanConfig: (key: string) => boolean | undefined;
+    setBooleanConfig: (key: string, value: boolean) => void;
+    getNumberConfig: (key: string) => number | undefined;
+    setNumberConfig: (key: string, value: number) => void;
 }
 
 export class MySettingsTab extends PluginSettingTab {
-    plugin: ISettingsTabPlugin;
-    constructor(app: App, plugin: ISettingsTabPlugin) {
+    plugin: ISettingsProvider;
+    constructor(app: App, plugin: ISettingsProvider) {
         super(app, plugin);
         this.plugin = plugin;
     }

@@ -1,13 +1,45 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { DEFAULT_SETTINGS, MySettings, MySettingsTab } from 'src/settings';
+import { DEFAULT_SETTINGS, ISettingsProvider, MySettings, MySettingsTab } from 'src/settings';
 import { Client as LangSmithClient } from 'langsmith';
-import { LangChainProvider } from 'src/llm/langchain';
+import { ILangChainProvider, ModelType } from 'src/llm/langchain';
 import * as O from 'fp-ts/lib/Option';
-import { openClipboardFormatterModal, openMarkdownFormatterModal } from 'src/agents/formatter';
+import { openClipboardFormatterModal, openMarkdownFormatterModal } from 'src/agents/markdown_formatter';
+import { openCustomPromptFormatterModal } from 'src/agents/markdown_formatter';
+import { parseKlibOutput } from 'src/tools/klib_importer';
 
 
-export default class MyPlugin extends Plugin implements LangChainProvider {
+export default class MyPlugin extends Plugin implements ILangChainProvider, ISettingsProvider {
+	getStringConfig(key: string): string | undefined {
+		return this.settings[key as keyof MySettings] as string | undefined;
+	}
+	setStringConfig(key: string, value: string): void {
+		this.settings[key as keyof MySettings] = value;
+		this.saveSettings();
+	}
+	getBooleanConfig(key: string): boolean | undefined {
+		return this.settings[key as keyof MySettings] as boolean | undefined;
+	}
+	setBooleanConfig(key: string, value: boolean): void {
+		this.settings[key as keyof MySettings] = value;
+		this.saveSettings();
+	}
+	getNumberConfig(key: string): number | undefined {
+		return this.settings[key as keyof MySettings] as number | undefined;
+	}
+	setNumberConfig(key: string, value: number): void {
+		this.settings[key as keyof MySettings] = value;
+		this.saveSettings();
+	}
+
+	private defaultModelType: ModelType = ModelType.GPT4o;
+
+	getDefaultModelType(): ModelType {
+		return this.defaultModelType;
+	}
+	setDefaultModelType(modelType: ModelType): void {
+		this.defaultModelType = modelType;
+	}
 	getLangsmithClient(): O.Option<LangSmithClient> {
 		if (this.settings.langchainApiKey && this.settings.enableLangSmithTracing) {
 			return O.some(new LangSmithClient({
@@ -45,11 +77,11 @@ export default class MyPlugin extends Plugin implements LangChainProvider {
 			id: 'format-into-markdown',
 			name: 'Format into Markdown',
 			editorCallback: async (editor: Editor, view: MarkdownView) => {
-				const content = editor.getValue();
+				const content = editor.getSelection();
 				const formattedContent = await openMarkdownFormatterModal(
 					this.app,
 					content,
-					1, // Start with heading level 1
+					this,
 					this
 				);
 				editor.setValue(formattedContent);
@@ -64,10 +96,36 @@ export default class MyPlugin extends Plugin implements LangChainProvider {
 				const cursor = editor.getCursor();
 				const formattedContent = await openClipboardFormatterModal(
 					this.app,
-					1, // Start with heading level 1
+					this,
 					this
 				);
 				editor.replaceRange(formattedContent, cursor, cursor);
+			}
+		});
+
+		// Add command to format custom markdown
+		this.addCommand({
+			id: 'format-custom-markdown',
+			name: 'Format Custom Markdown',
+			editorCallback: async (editor: Editor, view: MarkdownView) => {
+				const content = editor.getSelection();
+				const formattedContent = await openCustomPromptFormatterModal(
+					this.app,
+					content,
+					this,
+					this
+				);
+			}
+		});
+
+		// Add command to import klib output
+		this.addCommand({
+			id: 'import-klib-output',
+			name: 'Import Klib Output',
+			editorCallback: async (editor: Editor, view: MarkdownView) => {
+				const clipboardContent = await navigator.clipboard.readText();
+				const formattedContent = parseKlibOutput(clipboardContent);
+				editor.setValue(formattedContent);
 			}
 		});
 	}
